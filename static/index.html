@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>landrop</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #deded9; --hover: #f0f0ec; --accent: #2f6fdb; --danger: #c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ececea; --muted: #9a9a94; --card: #1f1f1e; --line: #33332f; --hover: #282826; --accent: #6a9cf0; --danger: #e86a5c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 18px; }
+  header .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+  header form { margin: 0; }
+  header form button { font-size: 12px; padding: 3px 8px; }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 16px 16px; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } header .hint { display: none; } header form { margin-left: auto; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-width: 0; }
+  section.drag { outline: 2px dashed var(--accent); outline-offset: -4px; }
+  .head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .head h2 { margin: 0; font-size: 15px; }
+  .head .sub { color: var(--muted); font-size: 12px; }
+  .head [data-upload] { margin-left: auto; }
+  .head [data-bulk] { margin-left: auto; }
+  .head [data-bulk] + [data-upload] { margin-left: 0; }
+  .head [data-bulk][hidden] { display: none; }
+  .head .all { margin: 0; }
+  li input[type=checkbox], .head .all { width: 16px; height: 16px; flex: none; accent-color: var(--accent); cursor: pointer; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+  button:hover { background: var(--hover); }
+  button.danger { color: var(--danger); }
+  .status { font-size: 12px; color: var(--muted); padding: 0 14px; min-height: 0; }
+  .status:not(:empty) { padding: 8px 14px 0; }
+  ul { list-style: none; margin: 0; padding: 6px; }
+  li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; }
+  li:hover, li:focus { background: var(--hover); outline: none; }
+  li:focus { box-shadow: inset 0 0 0 1px var(--accent); }
+  li.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .thumb { width: 40px; height: 40px; flex: none; border-radius: 4px; object-fit: cover; background: var(--hover); display: grid; place-items: center; font-size: 10px; color: var(--muted); text-transform: uppercase; overflow: hidden; }
+  .meta { flex: 1; min-width: 0; }
+  .name, .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name { font-weight: 500; }
+  .preview, .info { color: var(--muted); font-size: 12px; }
+  .actions { display: flex; gap: 4px; flex: none; }
+  .actions a, .actions button { font-size: 12px; padding: 3px 8px; }
+  .actions a { color: var(--fg); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .empty { color: var(--muted); text-align: center; padding: 24px; }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>landrop</h1>
+  <span class="hint"><kbd>r</kbd> refresh · <kbd>u</kbd> upload · <kbd>Ctrl</kbd>+<kbd>V</kbd> paste to outgoing · <kbd>↑</kbd><kbd>↓</kbd> rows · <kbd>Space</kbd> select · <kbd>a</kbd> all · <kbd>Esc</kbd> clear · <kbd>Enter</kbd> download · <kbd>Del</kbd> delete</span>
+  <form method="post" action="/ui/logout"><button>Log out</button></form>
+</header>
+<main>
+  <section data-box="incoming">
+    <div class="head"><input type="checkbox" class="all" title="Select all (a)"><h2>Incoming</h2><span class="sub">from the phone</span><button class="danger" data-bulk hidden></button><button data-upload>Upload</button></div>
+    <div class="status"></div>
+    <ul></ul>
+    <input type="file" multiple>
+  </section>
+  <section data-box="outgoing">
+    <div class="head"><input type="checkbox" class="all" title="Select all (a)"><h2>Outgoing</h2><span class="sub">for "Get From Landrop"</span><button class="danger" data-bulk hidden></button><button data-upload>Upload</button></div>
+    <div class="status"></div>
+    <ul></ul>
+    <input type="file" multiple>
+  </section>
+</main>
+<script>
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|avif)$/i;
+const sections = [...document.querySelectorAll("section")];
+const lastSig = {};
+let activeBox = "outgoing";
+const selected = { incoming: new Set(), outgoing: new Set() };
+const sectionOf = box => sections.find(s => s.dataset.box === box);
+
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+  return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+
+function fmtTime(t) {
+  const d = new Date(t * 1000), now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                 : d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function fileUrl(box, name, inline) {
+  return `/api/${box}/${encodeURIComponent(name)}` + (inline ? "?inline=1" : "");
+}
+
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) { location.href = "/ui/login"; throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+  return res.json();
+}
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k in e ? (e[k] = v) : e.setAttribute(k, v);
+  e.append(...kids);
+  return e;
+}
+
+function renderRow(box, f) {
+  const ext = (f.name.match(/\.([^.]+)$/) || [, "file"])[1];
+  const thumb = IMAGE_EXT.test(f.name)
+    ? el("img", { className: "thumb", src: fileUrl(box, f.name, true), loading: "lazy", alt: "" })
+    : el("div", { className: "thumb" }, ext.slice(0, 4));
+  const meta = el("div", { className: "meta" },
+    el("div", { className: "name", title: f.name }, f.name),
+    f.preview ? el("div", { className: "preview" }, f.preview) : "",
+    el("div", { className: "info" }, `${fmtSize(f.size)} · ${fmtTime(f.mtime)}`));
+  const del = el("button", { className: "danger", onclick: () => remove(box, f.name) }, "Delete");
+  const dl = el("a", { href: fileUrl(box, f.name) }, "Download");
+  const check = el("input", { type: "checkbox", tabIndex: -1, title: "Select (Space)", onchange: () => toggle(box, f.name, check.checked) });
+  const li = el("li", { tabIndex: 0 }, check, thumb, meta, el("div", { className: "actions" }, dl, del));
+  li.dataset.name = f.name;
+  li.addEventListener("keydown", e => {
+    if (e.target !== li) return;
+    if (e.key === "Enter") dl.click();
+    if (e.key === " ") { e.preventDefault(); toggle(box, f.name); }
+    const step = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }[e.key];
+    if (step) {
+      e.preventDefault();
+      (step > 0 ? li.nextElementSibling : li.previousElementSibling)?.focus();
+    }
+    if (e.key === "Delete" || e.key === "Backspace") selected[box].size ? removeSelected(box) : remove(box, f.name);
+  });
+  return li;
+}
+
+async function load(section) {
+  const box = section.dataset.box;
+  let files;
+  try { files = await api(`/api/${box}`); }
+  catch (err) { setStatus(section, "Couldn't load: " + err.message); return; }
+  const sig = JSON.stringify(files);
+  if (sig === lastSig[box]) return;  // unchanged: don't re-render, keeps focus/scroll intact
+  lastSig[box] = sig;
+  const focused = document.activeElement?.closest("li")?.dataset.name;
+  const ul = section.querySelector("ul");
+  ul.replaceChildren(...(files.length ? files.map(f => renderRow(box, f)) : [el("li", { className: "empty" }, "Nothing here.")]));
+  if (focused) ul.querySelector(`li[data-name="${CSS.escape(focused)}"]`)?.focus();
+  const names = new Set(files.map(f => f.name));
+  for (const n of selected[box]) if (!names.has(n)) selected[box].delete(n);
+  syncSelection(section);
+}
+
+function syncSelection(section) {
+  const box = section.dataset.box, sel = selected[box];
+  const rows = [...section.querySelectorAll("li[data-name]")];
+  for (const li of rows) {
+    const on = sel.has(li.dataset.name);
+    li.classList.toggle("sel", on);
+    li.querySelector("input[type=checkbox]").checked = on;
+  }
+  const all = section.querySelector(".all");
+  all.checked = rows.length > 0 && sel.size === rows.length;
+  all.indeterminate = sel.size > 0 && sel.size < rows.length;
+  const bulk = section.querySelector("[data-bulk]");
+  bulk.hidden = !sel.size;
+  bulk.textContent = `Delete ${sel.size}`;
+}
+
+function toggle(box, name, on = !selected[box].has(name)) {
+  on ? selected[box].add(name) : selected[box].delete(name);
+  syncSelection(sectionOf(box));
+}
+
+function selectAll(box, on) {
+  const section = sectionOf(box);
+  selected[box].clear();
+  if (on) for (const li of section.querySelectorAll("li[data-name]")) selected[box].add(li.dataset.name);
+  syncSelection(section);
+}
+
+async function removeSelected(box) {
+  const names = [...selected[box]];
+  if (!names.length || !confirm(`Delete ${names.length} file${names.length > 1 ? "s" : ""} from ${box}?`)) return;
+  const section = sectionOf(box);
+  const results = await Promise.allSettled(names.map(n => api(fileUrl(box, n), { method: "DELETE" })));
+  const failed = names.filter((n, i) => results[i].status === "rejected");
+  selected[box] = new Set(failed);
+  setStatus(section, failed.length ? `Couldn't delete ${failed.length}: ${failed.join(", ")}` : `Deleted ${names.length}.`);
+  load(section);
+}
+
+const loadAll = () => sections.forEach(load);
+
+function setStatus(section, msg) { section.querySelector(".status").textContent = msg; }
+
+async function remove(box, name) {
+  if (!confirm(`Delete ${name} from ${box}?`)) return;
+  const section = sectionOf(box);
+  try { await api(fileUrl(box, name), { method: "DELETE" }); selected[box].delete(name); setStatus(section, ""); }
+  catch (err) { setStatus(section, "Delete failed: " + err.message); }
+  load(section);
+}
+
+function upload(section, fileList) {
+  if (!fileList.length) return;
+  const box = section.dataset.box;
+  const form = new FormData();
+  for (const f of fileList) form.append("file", f);
+  const label = fileList.length === 1 ? fileList[0].name : `${fileList.length} files`;
+  // XHR rather than fetch: fetch has no upload progress events.
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `/api/${box}`);
+  xhr.upload.onprogress = e => e.lengthComputable && setStatus(section, `Uploading ${label}… ${Math.round(e.loaded / e.total * 100)}%`);
+  xhr.onload = () => {
+    if (xhr.status === 401) { location.href = "/ui/login"; return; }
+    setStatus(section, xhr.status < 300 ? `Uploaded ${label}.` : `Upload failed (${xhr.status}).`);
+    load(section);
+  };
+  xhr.onerror = () => setStatus(section, "Upload failed: network error.");
+  setStatus(section, `Uploading ${label}…`);
+  xhr.send(form);
+}
+
+for (const section of sections) {
+  const input = section.querySelector("input[type=file]");
+  section.querySelector("[data-upload]").onclick = () => input.click();
+  section.querySelector("[data-bulk]").onclick = () => removeSelected(section.dataset.box);
+  section.querySelector(".all").onchange = e => selectAll(section.dataset.box, e.target.checked);
+  input.onchange = () => { upload(section, input.files); input.value = ""; };
+  section.addEventListener("focusin", () => activeBox = section.dataset.box);
+  section.addEventListener("mouseenter", () => activeBox = section.dataset.box);
+  section.addEventListener("dragover", e => { e.preventDefault(); section.classList.add("drag"); });
+  section.addEventListener("dragleave", e => { if (!section.contains(e.relatedTarget)) section.classList.remove("drag"); });
+  section.addEventListener("drop", e => { e.preventDefault(); section.classList.remove("drag"); upload(section, e.dataTransfer.files); });
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches("input:not([type=checkbox]), textarea")) return;
+  if (e.key === "r") loadAll();
+  if (e.key === "u") sectionOf(activeBox).querySelector("input[type=file]").click();
+  if (e.key === "a") selectAll(activeBox, selected[activeBox].size < sectionOf(activeBox).querySelectorAll("li[data-name]").length);
+  if (e.key === "Escape") selectAll(activeBox, false);
+});
+
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+// Ctrl+V anywhere drops into outgoing: clipboard files/images as-is, text as a .txt
+// named after its first words so it's recognizable in the phone's pick list.
+document.addEventListener("paste", e => {
+  if (e.target.matches("input:not([type=checkbox]), textarea")) return;
+  const outgoing = sectionOf("outgoing");
+  const files = [...e.clipboardData.files].map(f =>
+    /^image\.\w+$/.test(f.name) ? new File([f], `paste-${stamp()}${f.name.slice(5)}`, { type: f.type }) : f);
+  if (files.length) { e.preventDefault(); upload(outgoing, files); return; }
+  const text = e.clipboardData.getData("text/plain");
+  if (!text.trim()) return;
+  e.preventDefault();
+  const slug = text.trim().split("\n")[0].toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 40).replace(/-$/, "");
+  upload(outgoing, [new File([text], `${slug || "text"}-${stamp()}.txt`, { type: "text/plain" })]);
+});
+
+loadAll();
+setInterval(() => { if (!document.hidden) loadAll(); }, 5000);
+</script>
+</body>
+</html>

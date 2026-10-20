@@ -1,0 +1,25 @@
+# systemd user unit. Install with (from the repo root):
+#   sed "s|@LANDROP_DIR@|$PWD|g" autostart/landrop.service > ~/.config/systemd/user/landrop.service
+#   systemctl --user daemon-reload && systemctl --user enable --now landrop.service
+#
+# Tied to graphical-session.target so it starts after the desktop has exported
+# WAYLAND_DISPLAY/DISPLAY; started any earlier, the clipboard tools can't reach
+# the display. Only desktops with systemd session integration (GNOME, KDE, ...)
+# ever reach that target; check with `systemctl --user is-active
+# graphical-session.target`. If it says inactive (i3, plain sway, a headless
+# box), change both graphical-session.target lines to default.target, or
+# landrop will silently not start after the next reboot.
+[Unit]
+Description=landrop drop box server
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@LANDROP_DIR@
+ExecStart="@LANDROP_DIR@/.venv/bin/python" "@LANDROP_DIR@/server.py"
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

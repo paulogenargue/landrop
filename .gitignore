@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.token
+
+# runtime drop folders — content, not code
+incoming/
+outgoing/
+*.log
+.pytest_cache/
+
+# private, machine-specific notes for Claude Code
+CLAUDE.local.md

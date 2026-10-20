@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>landrop · login</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #deded9; --accent: #2f6fdb; --err: #c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ececea; --muted: #9a9a94; --card: #1f1f1e; --line: #33332f; --accent: #6a9cf0; --err: #e86a5c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, sans-serif; padding: 16px; }
+  form { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 100%; max-width: 360px; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: 14px ui-monospace, monospace; }
+  button { margin-top: 12px; width: 100%; padding: 9px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  .err { color: var(--err); margin: 10px 0 0; display: none; }
+</style>
+</head>
+<body>
+<form method="post" action="/ui/login">
+  <h1>landrop</h1>
+  <p>Paste the token from <code>landrop.token</code>.</p>
+  <input name="token" type="password" autocomplete="current-password" autofocus required aria-label="Token">
+  <button type="submit">Log in</button>
+  <p class="err" id="err">Wrong token.</p>
+</form>
+<script>
+  if (new URLSearchParams(location.search).has("error")) document.getElementById("err").style.display = "block";
+</script>
+</body>
+</html>
