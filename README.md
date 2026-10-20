@@ -6,6 +6,11 @@ There's no phone app. The iPhone side is two Shortcuts you build by hand in the 
 
 I wanted something small with no third-party app to trust, and something I can drive from a terminal.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/ui-desktop-dark.png">
+  <img alt="The landrop browser UI: incoming files from the phone on the left, outgoing files for the phone on the right, with thumbnails, text previews and per-file download and delete buttons" src="docs/ui-desktop-light.png">
+</picture>
+
 ## Features
 
 - Share Sheet upload from the iPhone into `incoming/`
@@ -156,6 +161,8 @@ Quick Look only previews the file. To keep it, tap the share button in the previ
 ## Browser UI
 
 Open `http://yourcomputer.local:8787/ui` and paste the token once. The login cookie lasts a year, and there's a Log out button.
+
+<img alt="The landrop browser UI on a phone-width screen in dark mode, with incoming and outgoing stacked" src="docs/ui-phone-dark.png" width="300">
 
 | Key | Action |
 | --- | --- |

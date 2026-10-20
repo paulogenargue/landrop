@@ -277,8 +277,10 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
         if result is None or result.returncode != 0:
             return jsonify(error="reading the clipboard failed"), 500
         text = result.stdout.lstrip("﻿")
-        if sys.platform == "win32" and text.endswith("\r\n"):
-            text = text[:-2]  # PowerShell appends a newline to its output
+        if sys.platform == "win32" and text.endswith("\n"):
+            # PowerShell appends a newline to its output (text mode has already
+            # turned its \r\n into \n).
+            text = text[:-1]
         return jsonify(text=text)
 
     @app.route("/clipboard", methods=["POST"])
