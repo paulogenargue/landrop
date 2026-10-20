@@ -28,7 +28,8 @@ DEFAULT_MAX_UPLOAD_MB = 2048
 COOKIE_NAME = "landrop_token"
 TEXT_PREVIEW_BYTES = 200
 MAX_TEXT_BYTES = 10 * 1024 * 1024  # text bodies are read into memory, files are streamed
-CLIPBOARD_TIMEOUT = 5
+# PowerShell alone can take several seconds to cold-start on Windows.
+CLIPBOARD_TIMEOUT = 15 if sys.platform == "win32" else 5
 # Only these are ever rendered inline (thumbnails). Everything else downloads,
 # so an uploaded .html/.svg can't run script on this origin.
 INLINE_MIMETYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/avif"}
