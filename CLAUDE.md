@@ -37,8 +37,10 @@ On demand, not continuous sync. See `README.md` for setup and usage.
 - **File responses get `Content-Security-Policy: sandbox`, and only raster
   images are ever served inline.** Uploaded HTML/SVG would otherwise run
   script on the UI's origin.
-- **Upload filenames carry microsecond timestamps** so bursts of shares
-  don't overwrite each other.
+- **Uploads never overwrite.** Names get a microsecond timestamp, but that
+  isn't unique on its own (Windows clocks can be ~16 ms coarse), so
+  `new_file()` creates each file with `O_EXCL` and adds a `-N` suffix on a
+  clash.
 - **Clipboard tools are per OS** (`pbcopy`/`pbpaste`, PowerShell, then
   `wl-copy`, `xclip`, `xsel`). Each has an encoding or blocking quirk,
   documented inline in `_clipboard_cmds` and `set_clipboard`.

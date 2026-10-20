@@ -99,6 +99,17 @@ def test_uploads_in_same_second_dont_collide(client, tmp_path):
     assert len(incoming(tmp_path)) == 5
 
 
+def test_uploads_with_frozen_clock_dont_collide(client, tmp_path, monkeypatch):
+    # Windows clocks can be ~16 ms coarse; identical timestamps must not overwrite.
+    frozen = server.datetime(2026, 1, 1)
+    monkeypatch.setattr(server, "datetime", type("D", (), {"now": staticmethod(lambda: frozen)}))
+    for i in range(3):
+        client.post("/upload", data=bytes([i]) * 10, content_type="image/jpeg")
+    assert sorted(p.read_bytes() for p in incoming(tmp_path)) == [bytes([i]) * 10 for i in range(3)]
+    stem = "20260101-000000-000000-upload"
+    assert {p.name for p in incoming(tmp_path)} == {f"{stem}.jpg", f"{stem}-1.jpg", f"{stem}-2.jpg"}
+
+
 def test_upload_size_limit(client, tmp_path):
     r = client.post("/upload", data=b"\0" * (1024 * 1024 + 1), content_type="application/octet-stream")
     assert r.status_code == 413

@@ -3,6 +3,7 @@
 
 import argparse
 import hmac
+import itertools
 import logging
 import mimetypes
 import os
@@ -126,8 +127,20 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
     def token_ok(supplied):
         return hmac.compare_digest((supplied or "").encode(), secret_token.encode())
 
-    def timestamp():
-        return datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    def new_file(dest_dir, name, stamp=True):
+        """Create and return an empty file for `name` (timestamp-prefixed by
+        default) that didn't exist before. The timestamp alone isn't unique:
+        Windows clocks can tick as coarsely as ~16 ms, so bursts of shares would
+        overwrite each other. O_EXCL plus a -N suffix makes that impossible."""
+        base = f"{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}-{name}" if stamp else name
+        stem, dot, ext = base.rpartition(".") if "." in base else (base, "", "")
+        for n in itertools.count():
+            dest = dest_dir / (base if n == 0 else f"{stem}-{n}{dot}{ext}")
+            try:
+                os.close(os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
+                return dest
+            except FileExistsError:
+                continue
 
     @app.before_request
     def require_shared_secret():
@@ -201,12 +214,12 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
                 text = request.form.get("text")
                 if not text:
                     return jsonify(error="no file or text in request"), 400
-                dest = incoming_dir / f"{timestamp()}-text.txt"
+                dest = new_file(incoming_dir, "text.txt")
                 dest.write_text(text, encoding="utf-8")
                 return jsonify(saved=dest.name)
             upload_file = request.files["file"]
             name = safe_filename(upload_file.filename)
-            dest = incoming_dir / f"{timestamp()}-{name}"
+            dest = new_file(incoming_dir, name)
             upload_file.save(dest)
             return jsonify(saved=dest.name)
 
@@ -220,7 +233,7 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
         is_text_share = mimetype in ("text/plain", "application/x-www-form-urlencoded", "") and small
         if not is_text_share:
             ext = UPLOAD_EXTENSIONS.get(mimetype) or mimetypes.guess_extension(mimetype) or ""
-            dest = incoming_dir / f"{timestamp()}-{'text' if mimetype == 'text/plain' else 'upload'}{ext}"
+            dest = new_file(incoming_dir, f"{'text' if mimetype == 'text/plain' else 'upload'}{ext}")
             save_stream(dest)
             if dest.stat().st_size == 0:
                 dest.unlink()
@@ -228,12 +241,13 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
             return jsonify(saved=dest.name)
 
         text = text_field()
-        dest = incoming_dir / f"{timestamp()}-text.txt"
         if text:
+            dest = new_file(incoming_dir, "text.txt")
             dest.write_text(text, encoding="utf-8")
         elif request.get_data(cache=True):
             # Not UTF-8 (a Latin-1 .txt, or a mislabeled file): keep the exact
             # bytes rather than refuse it or decode it lossily.
+            dest = new_file(incoming_dir, "text.txt")
             dest.write_bytes(request.get_data(cache=True))
         else:
             return jsonify(error="no file or text in request"), 400
@@ -360,9 +374,7 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
         saved = []
         for upload_file in files:
             name = safe_filename(upload_file.filename)
-            dest = dest_dir / name
-            if dest.exists():
-                dest = dest_dir / f"{timestamp()}-{name}"
+            dest = new_file(dest_dir, name, stamp=False)  # a clash becomes name-1.ext
             upload_file.save(dest)
             saved.append(dest.name)
         return jsonify(saved=saved)
