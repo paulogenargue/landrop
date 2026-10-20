@@ -32,6 +32,17 @@ CLIPBOARD_TIMEOUT = 5
 # so an uploaded .html/.svg can't run script on this origin.
 INLINE_MIMETYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/avif"}
 
+# mimetypes reads the OS's own database (Windows registry, macOS mime.types),
+# which disagrees across platforms (text/vcard is ".vcard" on macOS and missing
+# on Windows), so pin the types a phone actually shares.
+UPLOAD_EXTENSIONS = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp",
+    "image/heic": ".heic", "image/heif": ".heif", "video/quicktime": ".mov", "video/mp4": ".mp4",
+    "audio/mp4": ".m4a", "audio/mpeg": ".mp3", "application/pdf": ".pdf", "application/zip": ".zip",
+    "application/json": ".json", "text/plain": ".txt", "text/csv": ".csv", "text/vcard": ".vcf",
+    "text/x-vcard": ".vcf", "text/calendar": ".ics", "text/html": ".html",
+}
+
 log = logging.getLogger("landrop")
 
 # Characters that break a path, a Windows filename, or a URL the iOS Shortcut
@@ -208,7 +219,7 @@ def create_app(data_dir, max_upload_mb=DEFAULT_MAX_UPLOAD_MB, clipboard=True):
         small = (request.content_length or 0) <= MAX_TEXT_BYTES
         is_text_share = mimetype in ("text/plain", "application/x-www-form-urlencoded", "") and small
         if not is_text_share:
-            ext = mimetypes.guess_extension(mimetype) or ""
+            ext = UPLOAD_EXTENSIONS.get(mimetype) or mimetypes.guess_extension(mimetype) or ""
             dest = incoming_dir / f"{timestamp()}-{'text' if mimetype == 'text/plain' else 'upload'}{ext}"
             save_stream(dest)
             if dest.stat().st_size == 0:

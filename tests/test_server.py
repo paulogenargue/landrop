@@ -177,7 +177,8 @@ def test_clipboard_disabled(tmp_path, token):
 def test_clipboard_roundtrip_with_fake_tool(client, monkeypatch, tmp_path):
     store = tmp_path / "clip"
     py = sys.executable
-    copy = [py, "-c", f"import sys; open({str(store)!r}, 'w', encoding='utf-8').write(sys.stdin.read())"]
+    copy = [py, "-c", f"import sys; sys.stdin.reconfigure(encoding='utf-8'); "
+                      f"open({str(store)!r}, 'w', encoding='utf-8').write(sys.stdin.read())"]
     paste = [py, "-c", f"import sys; sys.stdout.reconfigure(encoding='utf-8'); "
                        f"sys.stdout.write(open({str(store)!r}, encoding='utf-8').read())"]
     monkeypatch.setattr(server, "_clipboard_cmds", lambda: (copy, paste, None))
